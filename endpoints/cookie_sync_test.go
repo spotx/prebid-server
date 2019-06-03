@@ -15,6 +15,7 @@ import (
 	"github.com/prebid/prebid-server/adapters/audienceNetwork"
 	"github.com/prebid/prebid-server/adapters/lifestreet"
 	"github.com/prebid/prebid-server/adapters/pubmatic"
+	"github.com/prebid/prebid-server/adapters/spotxchange"
 	analyticsConf "github.com/prebid/prebid-server/analytics/config"
 	"github.com/prebid/prebid-server/config"
 	"github.com/prebid/prebid-server/gdpr"
@@ -146,6 +147,7 @@ func testableEndpoint(perms gdpr.Permissions, cfgGDPR config.GDPR) httprouter.Ha
 func syncersForTest() map[openrtb_ext.BidderName]usersync.Usersyncer {
 	return map[openrtb_ext.BidderName]usersync.Usersyncer{
 		openrtb_ext.BidderAppnexus:   appnexus.NewAppnexusSyncer(template.Must(template.New("sync").Parse("someurl.com"))),
+		openrtb_ext.BidderSpotx:   spotxchange.NewSpotxSyncer(template.Must(template.New("sync").Parse("atest.com"))),
 		openrtb_ext.BidderFacebook:   audienceNetwork.NewFacebookSyncer(template.Must(template.New("sync").Parse("https://www.facebook.com/audiencenetwork/idsync/?partner=partnerId&callback=localhost%2Fsetuid%3Fbidder%3DaudienceNetwork%26gdpr%3D{{.GDPR}}%26gdpr_consent%3D{{.GDPRConsent}}%26uid%3D%24UID"))),
 		openrtb_ext.BidderLifestreet: lifestreet.NewLifestreetSyncer(template.Must(template.New("sync").Parse("anotherurl.com"))),
 		openrtb_ext.BidderPubmatic:   pubmatic.NewPubmaticSyncer(template.Must(template.New("sync").Parse("thaturl.com"))),
