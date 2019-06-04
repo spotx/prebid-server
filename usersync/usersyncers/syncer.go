@@ -2,6 +2,11 @@ package usersyncers
 
 import (
 	"github.com/prebid/prebid-server/adapters/gamoshi"
+<<<<<<< HEAD
+=======
+	"github.com/prebid/prebid-server/adapters/spotx"
+
+>>>>>>> Updated package and branding name
 	"strings"
 	"text/template"
 

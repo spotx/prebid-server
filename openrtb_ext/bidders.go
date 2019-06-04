@@ -51,6 +51,10 @@ const (
 	BidderSomoaudience   BidderName = "somoaudience"
 	BidderSovrn          BidderName = "sovrn"
 	BidderSonobi         BidderName = "sonobi"
+<<<<<<< HEAD
+=======
+	BidderSpotx          BidderName = "spotx"
+>>>>>>> Updated package and branding name
 	BidderYieldmo        BidderName = "yieldmo"
 	BidderVisx           BidderName = "visx"
 	BidderTappx          BidderName = "tappx"
