@@ -45,7 +45,7 @@ const (
 	BidderSomoaudience   BidderName = "somoaudience"
 	BidderSovrn          BidderName = "sovrn"
 	BidderSonobi         BidderName = "sonobi"
-	BidderSpotx          BidderName = "spotxchange"
+	BidderSpotx          BidderName = "spotx"
 	BidderYieldmo        BidderName = "yieldmo"
 )
 
