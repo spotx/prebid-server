@@ -1,4 +1,4 @@
-package spotxchange
+package spotx
 
 import (
 	"text/template"
@@ -8,5 +8,5 @@ import (
 )
 
 func NewSpotxSyncer(temp *template.Template) usersync.Usersyncer {
-	return adapters.NewSyncer("spotxchange", 165, temp, adapters.SyncTypeRedirect)
+	return adapters.NewSyncer("spotx", 165, temp, adapters.SyncTypeRedirect)
 }

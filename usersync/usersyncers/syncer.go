@@ -1,6 +1,12 @@
 package usersyncers
 
 import (
+<<<<<<< HEAD
+=======
+	"github.com/prebid/prebid-server/adapters/gamoshi"
+	"github.com/prebid/prebid-server/adapters/spotx"
+
+>>>>>>> Updated package and branding name
 	"strings"
 	"text/template"
 
@@ -84,11 +90,15 @@ func NewSyncerMap(cfg *config.Configuration) map[openrtb_ext.BidderName]usersync
 	insertIntoMap(cfg, syncers, openrtb_ext.BidderSovrn, sovrn.NewSovrnSyncer)
 	insertIntoMap(cfg, syncers, openrtb_ext.BidderSonobi, sonobi.NewSonobiSyncer)
 <<<<<<< HEAD
+<<<<<<< HEAD
 	insertIntoMap(cfg, syncers, openrtb_ext.BidderTriplelift, triplelift.NewTripleliftSyncer)
 	insertIntoMap(cfg, syncers, openrtb_ext.BidderVrtcal, vrtcal.NewVrtcalSyncer)
 =======
 	insertIntoMap(cfg, syncers, openrtb_ext.BidderSpotx, spotxchange.NewSpotxSyncer)
 >>>>>>> Add new user syncer
+=======
+	insertIntoMap(cfg, syncers, openrtb_ext.BidderSpotx, spotx.NewSpotxSyncer)
+>>>>>>> Updated package and branding name
 	insertIntoMap(cfg, syncers, openrtb_ext.BidderYieldmo, yieldmo.NewYieldmoSyncer)
 	insertIntoMap(cfg, syncers, openrtb_ext.BidderVisx, visx.NewVisxSyncer)
 	insertIntoMap(cfg, syncers, openrtb_ext.BidderGamoshi, gamoshi.NewGamoshiSyncer)

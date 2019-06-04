@@ -1,4 +1,4 @@
-package spotxchange
+package spotx
 
 import (
 	"testing"
