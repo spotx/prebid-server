@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Spotx Adapter Params",
+  "description": "A schema which validates params accepted by the SpotX adapter",
+  "type": "object",
+  "properties": {
+    "boxing": {
+      "type": "boolean",
+      "description": "Allow boxing"
+    },
+    "channel_id": {
+      "type": "integer",
+      "description": "Identifies the publisher channel to retrieve ads from"
+    },
+    "ortb_version": {
+      "type": "string",
+      "enum": ["2.3", "2.5"],
+      "description": "Identifies the schema version of Open RTB used"
+    },
+    "price_floor": {
+      "type": "number",
+      "description": "Indicates the price floor"
+    },
+    "currency": {
+      "type": "string",
+      "description": "Identifies the currency of the price floor"
+    },
+    "white_list": {
+      "type": "object",
+      "description": "Item lists to force",
+      "properties": {
+        "lang": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "seat": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "black_list": {
+      "type": "object",
+      "description": "Item lists to not use",
+      "properties": {
+        "advertiser": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cat": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "seat": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "kvp": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "description": "A key with one or more values associated with it. These are used in buy-side segment targeting.",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["key"]
+      }
+    }
+  }
+}

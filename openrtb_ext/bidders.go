@@ -51,10 +51,7 @@ const (
 	BidderSomoaudience   BidderName = "somoaudience"
 	BidderSovrn          BidderName = "sovrn"
 	BidderSonobi         BidderName = "sonobi"
-<<<<<<< HEAD
-=======
 	BidderSpotx          BidderName = "spotx"
->>>>>>> Updated package and branding name
 	BidderYieldmo        BidderName = "yieldmo"
 	BidderVisx           BidderName = "visx"
 	BidderTappx          BidderName = "tappx"
@@ -93,6 +90,7 @@ var BidderMap = map[string]BidderName{
 	"somoaudience":    BidderSomoaudience,
 	"sovrn":           BidderSovrn,
 	"sonobi":          BidderSonobi,
+	"spotx":		   BidderSpotx,
 	"triplelift":      BidderTriplelift,
 	"unruly":          BidderUnruly,
 	"verizonmedia":    BidderVerizonMedia,
