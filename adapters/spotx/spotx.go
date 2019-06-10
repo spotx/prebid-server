@@ -62,26 +62,41 @@ func getMediaTypeForImp(impId string, imps []openrtb.Imp) openrtb_ext.BidType {
 	return mediaType
 }
 
-func translateProtocols(protos []int8) []openrtb.Protocol {
-	length := len(protos)
-	result := make([]openrtb.Protocol, length, length)
+func parseVastResponse(vastResponse string, bidResponse *adapters.TypedBid) error {
 
-	for i, p := range protos {
-		result[i] = openrtb.Protocol(p)
-	}
-
-	return result
+	return nil
 }
 
-func getPlaybackMethods(methods ...int8) []openrtb.PlaybackMethod {
-	length := len(methods)
-	result := make([]openrtb.PlaybackMethod, length, length)
-
-	for i, p := range methods {
-		result[i] = openrtb.PlaybackMethod(p)
+// getMediaTypeForBid determines which type of bid.
+func getMediaTypeForBid(bid *spotxBidExt) (openrtb_ext.BidType, error) {
+	switch bid.Width {
+	case 0:
+		return openrtb_ext.BidTypeBanner, nil
+	case 1:
+		return openrtb_ext.BidTypeVideo, nil
+	case 2:
+		return openrtb_ext.BidTypeAudio, nil
+	case 3:
+		return openrtb_ext.BidTypeNative, nil
+	default:
+		return "", fmt.Errorf("Unrecognized bid_ad_type in response from appnexus: %d", bid.Width)
 	}
+}
 
-	return result
+type spotxReqExt struct {
+	Spotx *openrtb_ext.ExtImpSpotX `json:"spotx,omitempty"`
+}
+
+type spotxBidExt struct {
+	BidID string `json:"bid_id"`
+	Code string `json:"code"`
+	CreativeID string `json:"creative_id"`
+	MediaType string `json:"media_type"`
+	Price float64 `json:"price"`
+	ADM string `json:"adm"`
+	Width int `json:"width"`
+	Height int `json:"height"`
+	ResponseTime int `json:"response_time_ms"`
 }
 
 func kvpToExt(items []openrtb_ext.ExtImpSpotXKeyVal) json.RawMessage {
@@ -102,6 +117,73 @@ type SpotxAdapter struct {
 	http *adapters.HTTPAdapter
 	URI string
 	
+}
+
+func (a *SpotxAdapter) makeOpenRTBRequest(ctx context.Context, ortbReq *openrtb.BidRequest, param *openrtb_ext.ExtImpSpotX, isDebug bool, ) (*openrtb.BidResponse, *pbs.BidderDebug, error) {
+
+	reqJSON, err := json.Marshal(ortbReq)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	uri := a.getURL(param)
+
+	debug := &pbs.BidderDebug{
+		RequestURI: uri,
+	}
+
+	if isDebug {
+		debug.RequestBody = string(reqJSON)
+	}
+
+	httpReq, err := http.NewRequest("POST", uri, bytes.NewBuffer(reqJSON))
+	httpReq.Header.Add("Content-Type", "application/json;charset=utf-8")
+	httpReq.Header.Add("Accept", "application/json")
+
+	resp, err := ctxhttp.Do(ctx, a.http.Client, httpReq)
+	if err != nil {
+		return nil, debug, err
+	}
+
+	debug.StatusCode = resp.StatusCode
+
+	if resp.StatusCode == 204 {
+		return nil, debug, nil
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, debug, err
+	}
+	responseBody := string(body)
+
+	if resp.StatusCode == http.StatusBadRequest {
+		return nil, debug, &errortypes.BadInput{
+			Message: fmt.Sprintf("HTTP status %d; body: %s", resp.StatusCode, responseBody),
+		}
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, debug, &errortypes.BadServerResponse{
+			Message: fmt.Sprintf("HTTP status %d; body: %s", resp.StatusCode, responseBody),
+		}
+	}
+
+	if isDebug {
+		debug.ResponseBody = responseBody
+	}
+
+	var bidResp openrtb.BidResponse
+	err = json.Unmarshal(body, &bidResp)
+	if err != nil {
+		return nil, debug, err
+	}
+	return &bidResp, debug, nil
+}
+
+func (a *SpotxAdapter) getURL(param *openrtb_ext.ExtImpSpotX) string {
+	return fmt.Sprintf("%s/%s/%d", a.URI, param.ORTBVersion, param.ChannelID)
 }
 
 // Name must be identical to the BidderName.
@@ -137,16 +219,6 @@ func (a *SpotxAdapter) Call(ctx context.Context, req *pbs.PBSRequest, bidder *pb
 		if err != nil {
 			return nil, err
 		}
-		ortbReq.BAdv = param.BlackList.Advertiser
-		ortbReq.BCat = param.BlackList.Category
-
-		ortbReq.WLang = param.WhiteList.Language
-
-		if len(param.WhiteList.Seat) > 0 {
-			ortbReq.WSeat = param.WhiteList.Seat
-		} else if len(param.BlackList.Seat) > 0 {
-			ortbReq.BSeat = param.BlackList.Seat
-		}
 
 		ortbReq.Imp[i].ID = unit.BidID
 		ortbReq.Imp[i].BidFloor = param.PriceFloor
@@ -160,62 +232,22 @@ func (a *SpotxAdapter) Call(ctx context.Context, req *pbs.PBSRequest, bidder *pb
 			ortbReq.Imp[i].Ext = kvpToExt(param.KVP)
 		}
 	}
-	uri := fmt.Sprintf("%s/%s/%d", a.URI, param.ORTBVersion, param.ChannelID)
 
-	reqJSON, err := json.Marshal(ortbReq)
-	if err != nil {
-		return nil, err
+	ortbReq.BAdv = param.BlackList.Advertiser
+	ortbReq.BCat = param.BlackList.Category
+
+	ortbReq.WLang = param.WhiteList.Language
+
+	if len(param.WhiteList.Seat) > 0 {
+		ortbReq.WSeat = param.WhiteList.Seat
+	} else if len(param.BlackList.Seat) > 0 {
+		ortbReq.BSeat = param.BlackList.Seat
 	}
 
-	debug := &pbs.BidderDebug{
-		RequestURI: uri,
-	}
-
+	bidResp, debug, err := a.makeOpenRTBRequest(ctx, &ortbReq, &param, req.IsDebug)
 	if req.IsDebug {
-		debug.RequestBody = string(reqJSON)
 		bidder.Debug = append(bidder.Debug, debug)
 	}
-
-	httpReq, err := http.NewRequest("POST", uri, bytes.NewBuffer(reqJSON))
-	httpReq.Header.Add("Content-Type", "application/json;charset=utf-8")
-	httpReq.Header.Add("Accept", "application/json")
-
-	resp, err := ctxhttp.Do(ctx, a.http.Client, httpReq)
-	if err != nil {
-		return nil, err
-	}
-
-	debug.StatusCode = resp.StatusCode
-
-	if resp.StatusCode == 204 {
-		return nil, nil
-	}
-
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	responseBody := string(body)
-
-	if resp.StatusCode == http.StatusBadRequest {
-		return nil, &errortypes.BadInput{
-			Message: fmt.Sprintf("HTTP status %d; body: %s", resp.StatusCode, responseBody),
-		}
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, &errortypes.BadServerResponse{
-			Message: fmt.Sprintf("HTTP status %d; body: %s", resp.StatusCode, responseBody),
-		}
-	}
-
-	if req.IsDebug {
-		debug.ResponseBody = responseBody
-	}
-
-	var bidResp openrtb.BidResponse
-	err = json.Unmarshal(body, &bidResp)
 	if err != nil {
 		return nil, err
 	}
@@ -269,9 +301,35 @@ func (a *SpotxAdapter) Call(ctx context.Context, req *pbs.PBSRequest, bidder *pb
 // "subpar" in some way. For example: the request contained ad types which this bidder doesn't support.
 //
 // If the error is caused by bad user input, return an errortypes.BadInput.
-func (a *SpotxAdapter) MakeRequests(request *openrtb.BidRequest) ([]*adapters.RequestData, []error) {
+func (a *SpotxAdapter) MakeRequests(request *openrtb.BidRequest) (result []*adapters.RequestData, errs []error) {
+	if len(request.Ext) > 0 {
+		var ext spotxReqExt
+		if err := json.Unmarshal(request.Ext, &ext); err == nil {
+			uri := a.getURL(ext.Spotx)
 
-	return nil, nil
+			headers := http.Header{}
+			headers.Add("Content-Type", "application/json;charset=utf-8")
+			headers.Add("Accept", "application/json")
+
+			reqJSON, err := json.Marshal(request)
+			if err != nil {
+				errs = append(errs, err)
+				return
+			}
+
+			result = []*adapters.RequestData{{
+				Method:  "POST",
+				Uri:     uri,
+				Body:    reqJSON,
+				Headers: headers,
+			}}
+		} else {
+			errs = append(errs,err)
+		}
+	} else {
+		errs = append(errs, errors.New("no extension data found"))
+	}
+	return
 }
 
 // MakeBids unpacks the server's response into Bids.
@@ -284,8 +342,58 @@ func (a *SpotxAdapter) MakeRequests(request *openrtb.BidRequest) ([]*adapters.Re
 // If the error was caused by bad user input, return a errortypes.BadInput.
 // If the error was caused by a bad server response, return a errortypes.BadServerResponse
 func (a *SpotxAdapter) MakeBids(internalRequest *openrtb.BidRequest, externalRequest *adapters.RequestData, response *adapters.ResponseData) (*adapters.BidderResponse, []error) {
+	if response.StatusCode == http.StatusNoContent {
+		return nil, nil
+	}
 
-	return nil, nil
+	if response.StatusCode == http.StatusBadRequest {
+		return nil, []error{&errortypes.BadInput{
+			Message: fmt.Sprintf("Unexpected status code: %d. Run with request.debug = 1 for more info", response.StatusCode),
+		}}
+	}
+
+	if response.StatusCode != http.StatusOK {
+		return nil, []error{fmt.Errorf("Unexpected status code: %d. Run with request.debug = 1 for more info", response.StatusCode)}
+	}
+
+	var bidResp openrtb.BidResponse
+	if err := json.Unmarshal(response.Body, &bidResp); err != nil {
+		return nil, []error{err}
+	}
+
+	var bidResponse *adapters.TypedBid
+	bidResponses := adapters.NewBidderResponseWithBidsCapacity(len(bidResp.SeatBid))
+
+	var errs []error
+	var cat string
+	for _, sb := range bidResp.SeatBid {
+		for i := 0; i < len(sb.Bid); i++ {
+			bid := sb.Bid[i]
+			if len(bid.Cat) > 0 {
+				cat = bid.Cat[0]
+			} else {
+				cat = ""
+			}
+			fmt.Printf("%+v\n", bid)
+			bidResponse = &adapters.TypedBid{
+				BidType: openrtb_ext.BidTypeVideo,
+				Bid:      &bid,
+				BidVideo: &openrtb_ext.ExtBidPrebidVideo{
+					Duration: 0,
+					PrimaryCategory: cat,
+				},
+			}
+
+			if bid.AdM != "" {
+				if err := parseVastResponse(bid.AdM, bidResponse); err != nil {
+					errs = append(errs, err)
+				}
+			}
+
+			bidResponses.Bids = append(bidResponses.Bids, bidResponse)
+		}
+	}
+	return bidResponses, errs
 }
 
 func NewAdapter(config *adapters.HTTPAdapterConfig, endpoint string) *SpotxAdapter {

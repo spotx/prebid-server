@@ -1,0 +1,20 @@
+{
+  "mockBidRequest": {
+
+  },
+  "httpCalls": [
+    {
+      "expectedRequest": {
+
+      },
+      "mockResponse": {
+
+      }
+    }
+  ],
+  "expectedBidResponses": [
+    {
+
+    }
+  ]
+}
