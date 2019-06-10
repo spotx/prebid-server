@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/mxmCherry/openrtb"
 	"github.com/prebid/prebid-server/adapters"
@@ -44,59 +46,102 @@ func parseParam(paramsInput json.RawMessage) (config openrtb_ext.ExtImpSpotX, er
 	return
 }
 
-// getMediaTypeForImp figures out which media type this bid is for.
-func getMediaTypeForImp(impId string, imps []openrtb.Imp) openrtb_ext.BidType {
-	mediaType := openrtb_ext.BidTypeBanner
+func getVideoImp(bid *openrtb.Bid, imps []openrtb.Imp) *openrtb_ext.ExtBidPrebidVideo {
+	dur := 0
 	for _, imp := range imps {
-		if imp.ID == impId {
+		if imp.ID == bid.ImpID {
 			if imp.Video != nil {
-				mediaType = openrtb_ext.BidTypeVideo
-			} else if imp.Audio != nil {
-				mediaType = openrtb_ext.BidTypeAudio
-			} else if imp.Native != nil {
-				mediaType = openrtb_ext.BidTypeNative
+				var cat string
+				if len(bid.Cat) > 0 {
+					cat = bid.Cat[0]
+				} else {
+					cat = ""
+				}
+
+				if bid.AdM != "" {
+					dur = parseVastResponseForDuration(bid.AdM)
+				}
+				return &openrtb_ext.ExtBidPrebidVideo{
+					Duration:        dur,
+					PrimaryCategory: cat,
+				}
 			}
-			return mediaType
+			break
 		}
 	}
-	return mediaType
-}
-
-func parseVastResponse(vastResponse string, bidResponse *adapters.TypedBid) error {
-
 	return nil
 }
 
-// getMediaTypeForBid determines which type of bid.
-func getMediaTypeForBid(bid *spotxBidExt) (openrtb_ext.BidType, error) {
-	switch bid.Width {
-	case 0:
-		return openrtb_ext.BidTypeBanner, nil
-	case 1:
-		return openrtb_ext.BidTypeVideo, nil
-	case 2:
-		return openrtb_ext.BidTypeAudio, nil
-	case 3:
-		return openrtb_ext.BidTypeNative, nil
-	default:
-		return "", fmt.Errorf("Unrecognized bid_ad_type in response from appnexus: %d", bid.Width)
+func parseVastResponseForDuration(vastResponse string) int {
+	dur := make([]uint8, 0, 10)
+	idx := 0
+	var temp string
+	var char uint8
+
+	vastXml:
+	for i := 0; i < len(vastResponse); i++ {
+		char = vastResponse[i]
+		if char == '<' {
+			i += 1
+			temp = strings.ToLower(string(vastResponse[i:i+8]))
+			if temp == "duration" {
+				i += 8
+				for {
+					i++
+					if char = vastResponse[i]; char == '<' {
+						break vastXml
+					}
+					dur = append(dur, char)
+				}
+			} else {
+				if idx = strings.Index(temp, "<"); idx != -1 {
+					i += idx - 1
+				} else {
+					i += 8
+				}
+			}
+		}
 	}
+
+	timeDuration := string(dur)
+	timeCodeComponents := strings.Split(timeDuration, ":")
+	duration :=  0
+
+	if len(timeCodeComponents) == 3 {
+		if i, err := strconv.Atoi(timeCodeComponents[0]); err == nil {
+			duration = i * 60 * 60
+		}
+		if i, err := strconv.Atoi(timeCodeComponents[1]); err == nil {
+			duration += i * 60
+		}
+		if i, err := strconv.Atoi(timeCodeComponents[2]); err == nil {
+			duration += i
+		}
+	}
+
+	return duration
+}
+
+// getMediaTypeForImp determines which type of bid.
+func getMediaTypeForImp(impId string, imps []openrtb.Imp) openrtb_ext.BidType {
+	for _, imp := range imps {
+		if imp.ID == impId {
+			if imp.Video != nil {
+				return openrtb_ext.BidTypeVideo
+			} else if imp.Banner != nil {
+				return openrtb_ext.BidTypeBanner
+			} else if imp.Native != nil {
+				return openrtb_ext.BidTypeNative
+			} else if imp.Audio != nil {
+				return openrtb_ext.BidTypeAudio
+			}
+		}
+	}
+	return openrtb_ext.BidTypeVideo
 }
 
 type spotxReqExt struct {
 	Spotx *openrtb_ext.ExtImpSpotX `json:"spotx,omitempty"`
-}
-
-type spotxBidExt struct {
-	BidID string `json:"bid_id"`
-	Code string `json:"code"`
-	CreativeID string `json:"creative_id"`
-	MediaType string `json:"media_type"`
-	Price float64 `json:"price"`
-	ADM string `json:"adm"`
-	Width int `json:"width"`
-	Height int `json:"height"`
-	ResponseTime int `json:"response_time_ms"`
 }
 
 func kvpToExt(items []openrtb_ext.ExtImpSpotXKeyVal) json.RawMessage {
@@ -120,7 +165,6 @@ type SpotxAdapter struct {
 }
 
 func (a *SpotxAdapter) makeOpenRTBRequest(ctx context.Context, ortbReq *openrtb.BidRequest, param *openrtb_ext.ExtImpSpotX, isDebug bool, ) (*openrtb.BidResponse, *pbs.BidderDebug, error) {
-
 	reqJSON, err := json.Marshal(ortbReq)
 	if err != nil {
 		return nil, nil, err
@@ -361,36 +405,17 @@ func (a *SpotxAdapter) MakeBids(internalRequest *openrtb.BidRequest, externalReq
 		return nil, []error{err}
 	}
 
-	var bidResponse *adapters.TypedBid
 	bidResponses := adapters.NewBidderResponseWithBidsCapacity(len(bidResp.SeatBid))
-
 	var errs []error
-	var cat string
+
 	for _, sb := range bidResp.SeatBid {
 		for i := 0; i < len(sb.Bid); i++ {
 			bid := sb.Bid[i]
-			if len(bid.Cat) > 0 {
-				cat = bid.Cat[0]
-			} else {
-				cat = ""
-			}
-			fmt.Printf("%+v\n", bid)
-			bidResponse = &adapters.TypedBid{
-				BidType: openrtb_ext.BidTypeVideo,
+			bidResponses.Bids = append(bidResponses.Bids, &adapters.TypedBid{
+				BidType:  getMediaTypeForImp(bid.ImpID, internalRequest.Imp),
 				Bid:      &bid,
-				BidVideo: &openrtb_ext.ExtBidPrebidVideo{
-					Duration: 0,
-					PrimaryCategory: cat,
-				},
-			}
-
-			if bid.AdM != "" {
-				if err := parseVastResponse(bid.AdM, bidResponse); err != nil {
-					errs = append(errs, err)
-				}
-			}
-
-			bidResponses.Bids = append(bidResponses.Bids, bidResponse)
+				BidVideo: getVideoImp(&bid, internalRequest.Imp),
+			})
 		}
 	}
 	return bidResponses, errs
