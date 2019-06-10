@@ -18,14 +18,13 @@ import (
 	"github.com/prebid/prebid-server/pbs"
 	"golang.org/x/net/context/ctxhttp"
 )
-// 79391
+
 var (
 	ortbVersionMap = map[string]string{
-		"" : "2.3",
+		"":    "2.3",
 		"2.3": "2.3",
 		"2.5": "2.5",
 	}
-	skipTrue = int8(1)
 )
 
 func parseParam(paramsInput json.RawMessage) (config openrtb_ext.ExtImpSpotX, err error) {
@@ -39,7 +38,7 @@ func parseParam(paramsInput json.RawMessage) (config openrtb_ext.ExtImpSpotX, er
 
 	if v, ok := ortbVersionMap[config.ORTBVersion]; ok {
 		config.ORTBVersion = v
-	} else  {
+	} else {
 		return config, errors.New("unsupported Open RTB version")
 	}
 
@@ -48,19 +47,18 @@ func parseParam(paramsInput json.RawMessage) (config openrtb_ext.ExtImpSpotX, er
 
 func getVideoImp(bid *openrtb.Bid, imps []openrtb.Imp) *openrtb_ext.ExtBidPrebidVideo {
 	dur := 0
+	cat := ""
 	for _, imp := range imps {
 		if imp.ID == bid.ImpID {
 			if imp.Video != nil {
-				var cat string
 				if len(bid.Cat) > 0 {
 					cat = bid.Cat[0]
-				} else {
-					cat = ""
 				}
 
 				if bid.AdM != "" {
 					dur = parseVastResponseForDuration(bid.AdM)
 				}
+
 				return &openrtb_ext.ExtBidPrebidVideo{
 					Duration:        dur,
 					PrimaryCategory: cat,
@@ -78,26 +76,25 @@ func parseVastResponseForDuration(vastResponse string) int {
 	var temp string
 	var char uint8
 
-	vastXml:
+vastXmlSearch:
 	for i := 0; i < len(vastResponse); i++ {
 		char = vastResponse[i]
 		if char == '<' {
-			i += 1
-			temp = strings.ToLower(string(vastResponse[i:i+8]))
+			temp = strings.ToLower(string(vastResponse[i+1 : i+9]))
 			if temp == "duration" {
-				i += 8
+				i += 10
 				for {
-					i++
 					if char = vastResponse[i]; char == '<' {
-						break vastXml
+						break vastXmlSearch
 					}
 					dur = append(dur, char)
+					i++
 				}
 			} else {
 				if idx = strings.Index(temp, "<"); idx != -1 {
-					i += idx - 1
+					i += idx
 				} else {
-					i += 8
+					i += 9
 				}
 			}
 		}
@@ -105,7 +102,7 @@ func parseVastResponseForDuration(vastResponse string) int {
 
 	timeDuration := string(dur)
 	timeCodeComponents := strings.Split(timeDuration, ":")
-	duration :=  0
+	duration := 0
 
 	if len(timeCodeComponents) == 3 {
 		if i, err := strconv.Atoi(timeCodeComponents[0]); err == nil {
@@ -122,7 +119,6 @@ func parseVastResponseForDuration(vastResponse string) int {
 	return duration
 }
 
-// getMediaTypeForImp determines which type of bid.
 func getMediaTypeForImp(impId string, imps []openrtb.Imp) openrtb_ext.BidType {
 	for _, imp := range imps {
 		if imp.ID == impId {
@@ -141,13 +137,11 @@ func getMediaTypeForImp(impId string, imps []openrtb.Imp) openrtb_ext.BidType {
 }
 
 type spotxReqExt struct {
-	Spotx *openrtb_ext.ExtImpSpotX `json:"spotx,omitempty"`
+	Spotx json.RawMessage `json:"spotx,omitempty"`
 }
 
 func kvpToExt(items []openrtb_ext.ExtImpSpotXKeyVal) json.RawMessage {
-	result := map[string][]string{
-
-	}
+	result := map[string][]string{}
 	for _, kvp := range items {
 		result[kvp.Key] = kvp.Values
 	}
@@ -160,11 +154,10 @@ func kvpToExt(items []openrtb_ext.ExtImpSpotXKeyVal) json.RawMessage {
 
 type SpotxAdapter struct {
 	http *adapters.HTTPAdapter
-	URI string
-	
+	URI  string
 }
 
-func (a *SpotxAdapter) makeOpenRTBRequest(ctx context.Context, ortbReq *openrtb.BidRequest, param *openrtb_ext.ExtImpSpotX, isDebug bool, ) (*openrtb.BidResponse, *pbs.BidderDebug, error) {
+func (a *SpotxAdapter) makeOpenRTBRequest(ctx context.Context, ortbReq *openrtb.BidRequest, param *openrtb_ext.ExtImpSpotX, isDebug bool) (*openrtb.BidResponse, *pbs.BidderDebug, error) {
 	reqJSON, err := json.Marshal(ortbReq)
 	if err != nil {
 		return nil, nil, err
@@ -331,7 +324,6 @@ func (a *SpotxAdapter) Call(ctx context.Context, req *pbs.PBSRequest, bidder *pb
 	return bids, nil
 }
 
-
 // MakeRequests makes the HTTP requests which should be made to fetch bids.
 //
 // Bidder implementations can assume that the incoming BidRequest has:
@@ -348,8 +340,14 @@ func (a *SpotxAdapter) Call(ctx context.Context, req *pbs.PBSRequest, bidder *pb
 func (a *SpotxAdapter) MakeRequests(request *openrtb.BidRequest) (result []*adapters.RequestData, errs []error) {
 	if len(request.Ext) > 0 {
 		var ext spotxReqExt
+		var param openrtb_ext.ExtImpSpotX
 		if err := json.Unmarshal(request.Ext, &ext); err == nil {
-			uri := a.getURL(ext.Spotx)
+
+			if param, err = parseParam(ext.Spotx); err != nil {
+				return nil, []error{err}
+			}
+
+			uri := a.getURL(&param)
 
 			headers := http.Header{}
 			headers.Add("Content-Type", "application/json;charset=utf-8")
@@ -368,7 +366,7 @@ func (a *SpotxAdapter) MakeRequests(request *openrtb.BidRequest) (result []*adap
 				Headers: headers,
 			}}
 		} else {
-			errs = append(errs,err)
+			errs = append(errs, err)
 		}
 	} else {
 		errs = append(errs, errors.New("no extension data found"))
@@ -392,12 +390,12 @@ func (a *SpotxAdapter) MakeBids(internalRequest *openrtb.BidRequest, externalReq
 
 	if response.StatusCode == http.StatusBadRequest {
 		return nil, []error{&errortypes.BadInput{
-			Message: fmt.Sprintf("Unexpected status code: %d. Run with request.debug = 1 for more info", response.StatusCode),
+			Message: fmt.Sprintf("unexpected status code: %d. Run with request.debug = 1 for more info", response.StatusCode),
 		}}
 	}
 
 	if response.StatusCode != http.StatusOK {
-		return nil, []error{fmt.Errorf("Unexpected status code: %d. Run with request.debug = 1 for more info", response.StatusCode)}
+		return nil, []error{fmt.Errorf("unexpected status code: %d. Run with request.debug = 1 for more info", response.StatusCode)}
 	}
 
 	var bidResp openrtb.BidResponse
@@ -428,9 +426,8 @@ func NewAdapter(config *adapters.HTTPAdapterConfig, endpoint string) *SpotxAdapt
 func NewBidder(client *http.Client, endpoint string) *SpotxAdapter {
 	a := &adapters.HTTPAdapter{Client: client}
 
-
 	return &SpotxAdapter{
-		http:           a,
-		URI:            endpoint,
+		http: a,
+		URI:  endpoint,
 	}
 }

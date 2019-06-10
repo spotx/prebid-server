@@ -10,14 +10,14 @@ import (
 // ORTBVersion refers the Open RTB contract version and is optional, but will default to 2.3
 // ChannelID refers to the publisher channel and is required
 type ExtImpSpotX struct {
-	Boxing	    ExtImpSpotXNullBool   `json:"boxing"`
-	ORTBVersion string                `json:"ortb_version"`
-	ChannelID	uint32                `json:"channel_id"`
-	WhiteList   ExtImpSpotXWhiteList  `json:"white_list,omitempty"`
-	BlackList   ExtImpSpotXBlackList  `json:"black_list,omitempty"`
-	PriceFloor  float64				  `json:"price_floor"`
-	Currency    string 				  `json:"currency"`
-	KVP			[]ExtImpSpotXKeyVal	  `json:"kvp,omitempty"`
+	Boxing      ExtImpSpotXNullBool  `json:"boxing"`
+	ORTBVersion string               `json:"ortb_version"`
+	ChannelID   uint32               `json:"channel_id"`
+	WhiteList   ExtImpSpotXWhiteList `json:"white_list,omitempty"`
+	BlackList   ExtImpSpotXBlackList `json:"black_list,omitempty"`
+	PriceFloor  float64              `json:"price_floor"`
+	Currency    string               `json:"currency"`
+	KVP         []ExtImpSpotXKeyVal  `json:"kvp,omitempty"`
 }
 
 type ExtImpSpotXWhiteList struct {
@@ -76,4 +76,3 @@ func (b ExtImpSpotXNullBool) MarshalJSON() ([]byte, error) {
 	}
 	return []byte("true"), nil
 }
-

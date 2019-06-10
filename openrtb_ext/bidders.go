@@ -95,6 +95,7 @@ var BidderMap = map[string]BidderName{
 	"unruly":          BidderUnruly,
 	"verizonmedia":    BidderVerizonMedia,
 	"vrtcal":          BidderVrtcal,
+	"spotx":           BidderSpotx,
 	"yieldmo":         BidderYieldmo,
 	"visx":            BidderVisx,
 	"tappx":           BidderTappx,
