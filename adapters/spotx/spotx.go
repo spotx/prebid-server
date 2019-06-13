@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,6 +18,14 @@ import (
 	"github.com/prebid/prebid-server/openrtb_ext"
 	"github.com/prebid/prebid-server/pbs"
 	"golang.org/x/net/context/ctxhttp"
+)
+
+const (
+	MINUTE           = 60 // Seconds
+	HOUR             = 60 * MINUTE
+	TimeStringLength = len("9999:99:99.999")
+	TagName          = "duration"
+	TagNameSkip      = len(TagName) + 1
 )
 
 var (
@@ -46,8 +55,11 @@ func parseParam(paramsInput json.RawMessage) (config openrtb_ext.ExtImpSpotX, er
 }
 
 func getVideoImp(bid *openrtb.Bid, imps []openrtb.Imp) *openrtb_ext.ExtBidPrebidVideo {
-	dur := 0
-	cat := ""
+	var (
+		dur float64
+		cat string
+	)
+
 	for _, imp := range imps {
 		if imp.ID == bid.ImpID {
 			if imp.Video != nil {
@@ -60,7 +72,7 @@ func getVideoImp(bid *openrtb.Bid, imps []openrtb.Imp) *openrtb_ext.ExtBidPrebid
 				}
 
 				return &openrtb_ext.ExtBidPrebidVideo{
-					Duration:        dur,
+					Duration:        int(math.Round(dur)),
 					PrimaryCategory: cat,
 				}
 			}
@@ -70,49 +82,56 @@ func getVideoImp(bid *openrtb.Bid, imps []openrtb.Imp) *openrtb_ext.ExtBidPrebid
 	return nil
 }
 
-func parseVastResponseForDuration(vastResponse string) int {
-	dur := make([]uint8, 0, 10)
+func parseVastResponseForDuration(vastResponse string) float64 {
+	dur := make([]uint8, 0, TimeStringLength) // longest valid time string
 	idx := 0
 	var temp string
 	var char uint8
 
 vastXmlSearch:
-	for i := 0; i < len(vastResponse); i++ {
+	for i := 0; i < len(vastResponse); i++ { // Iterate over every character
 		char = vastResponse[i]
-		if char == '<' {
-			temp = strings.ToLower(string(vastResponse[i+1 : i+9]))
-			if temp == "duration" {
-				i += 10
-				for {
-					if char = vastResponse[i]; char == '<' {
-						break vastXmlSearch
+		if char == '<' { // until we find a tag open
+			temp = strings.ToLower(string(vastResponse[i+1 : i+TagNameSkip]))
+			if temp == TagName { // and tag named "duration"
+				i += TagNameSkip
+				for { // Are there properties on it? We don't care about those right now
+					char = vastResponse[i]
+					i++
+					if char == '>' {
+						break
 					}
-					dur = append(dur, char)
+				}
+
+				for { // we iterate to grab the data
+					if char = vastResponse[i]; char == '<' {
+						break vastXmlSearch // and exit when we get to the close tag
+					}
+					dur = append(dur, char) // and copy it into our temp holder
 					i++
 				}
-			} else {
-				if idx = strings.Index(temp, "<"); idx != -1 {
-					i += idx
+			} else { // or keep going if it's not
+				if idx = strings.Index(temp, "<"); idx == -1 {
+					i += TagNameSkip // we've already looked at those characters so we can advance over them
 				} else {
-					i += 9
+					i += idx // UNLESS there's an another open tag in that string
 				}
 			}
 		}
 	}
 
-	timeDuration := string(dur)
-	timeCodeComponents := strings.Split(timeDuration, ":")
-	duration := 0
+	timeCodeComponents := strings.Split(string(dur), ":")
+	var duration float64 = 0
 
 	if len(timeCodeComponents) == 3 {
 		if i, err := strconv.Atoi(timeCodeComponents[0]); err == nil {
-			duration = i * 60 * 60
+			duration = float64(i * HOUR)
 		}
 		if i, err := strconv.Atoi(timeCodeComponents[1]); err == nil {
-			duration += i * 60
+			duration += float64(i * MINUTE)
 		}
-		if i, err := strconv.Atoi(timeCodeComponents[2]); err == nil {
-			duration += i
+		if f, err := strconv.ParseFloat(timeCodeComponents[2], 64); err == nil {
+			duration += f
 		}
 	}
 
@@ -176,6 +195,7 @@ func (a *SpotxAdapter) makeOpenRTBRequest(ctx context.Context, ortbReq *openrtb.
 	httpReq, err := http.NewRequest("POST", uri, bytes.NewBuffer(reqJSON))
 	httpReq.Header.Add("Content-Type", "application/json;charset=utf-8")
 	httpReq.Header.Add("Accept", "application/json")
+	httpReq.Header.Add("User-Agent", "application/json")
 
 	resp, err := ctxhttp.Do(ctx, a.http.Client, httpReq)
 	if err != nil {
