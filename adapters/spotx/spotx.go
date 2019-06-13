@@ -193,7 +193,7 @@ func (a *SpotxAdapter) makeOpenRTBRequest(ctx context.Context, ortbReq *openrtb.
 	httpReq, err := http.NewRequest("POST", uri, bytes.NewBuffer(reqJSON))
 	httpReq.Header.Add("Content-Type", "application/json;charset=utf-8")
 	httpReq.Header.Add("Accept", "application/json")
-	httpReq.Header.Add("User-Agent", "application/json")
+	httpReq.Header.Add("User-Agent", "spotx_prebid_server 1.0")
 
 	resp, err := ctxhttp.Do(ctx, a.http.Client, httpReq)
 	if err != nil {
