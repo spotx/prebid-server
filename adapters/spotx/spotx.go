@@ -56,7 +56,7 @@ func parseParam(paramsInput json.RawMessage) (config openrtb_ext.ExtImpSpotX, er
 
 func getVideoImp(bid *openrtb.Bid, imps []openrtb.Imp) *openrtb_ext.ExtBidPrebidVideo {
 	var (
-		dur float64
+		duration float64 = 0
 		cat string
 	)
 
@@ -68,11 +68,23 @@ func getVideoImp(bid *openrtb.Bid, imps []openrtb.Imp) *openrtb_ext.ExtBidPrebid
 				}
 
 				if bid.AdM != "" {
-					dur = parseVastResponseForDuration(bid.AdM)
+					timeCodeComponents := strings.Split(getTimeStringFromVastResponse(bid.AdM), ":")
+
+					if len(timeCodeComponents) == 3 {
+						if i, err := strconv.Atoi(timeCodeComponents[0]); err == nil {
+							duration = float64(i * HOUR)
+						}
+						if i, err := strconv.Atoi(timeCodeComponents[1]); err == nil {
+							duration += float64(i * MINUTE)
+						}
+						if f, err := strconv.ParseFloat(timeCodeComponents[2], 64); err == nil {
+							duration += f
+						}
+					}
 				}
 
 				return &openrtb_ext.ExtBidPrebidVideo{
-					Duration:        int(math.Round(dur)),
+					Duration:        int(math.Round(duration)),
 					PrimaryCategory: cat,
 				}
 			}
@@ -82,11 +94,13 @@ func getVideoImp(bid *openrtb.Bid, imps []openrtb.Imp) *openrtb_ext.ExtBidPrebid
 	return nil
 }
 
-func parseVastResponseForDuration(vastResponse string) float64 {
-	dur := make([]uint8, 0, TimeStringLength) // longest valid time string
-	idx := 0
-	var temp string
-	var char uint8
+func getTimeStringFromVastResponse(vastResponse string) string {
+	var(
+		dur = make([]uint8, 0, TimeStringLength)
+		idx int
+		temp string
+		char uint8
+	)
 
 vastXmlSearch:
 	for i := 0; i < len(vastResponse); i++ { // Iterate over every character
@@ -119,23 +133,7 @@ vastXmlSearch:
 			}
 		}
 	}
-
-	timeCodeComponents := strings.Split(string(dur), ":")
-	var duration float64 = 0
-
-	if len(timeCodeComponents) == 3 {
-		if i, err := strconv.Atoi(timeCodeComponents[0]); err == nil {
-			duration = float64(i * HOUR)
-		}
-		if i, err := strconv.Atoi(timeCodeComponents[1]); err == nil {
-			duration += float64(i * MINUTE)
-		}
-		if f, err := strconv.ParseFloat(timeCodeComponents[2], 64); err == nil {
-			duration += f
-		}
-	}
-
-	return duration
+	return string(dur)
 }
 
 func getMediaTypeForImp(impId string, imps []openrtb.Imp) openrtb_ext.BidType {
