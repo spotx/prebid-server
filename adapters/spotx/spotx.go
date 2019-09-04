@@ -57,7 +57,7 @@ func parseParam(paramsInput json.RawMessage) (config openrtb_ext.ExtImpSpotX, er
 func getVideoImp(bid *openrtb.Bid, imps []openrtb.Imp) *openrtb_ext.ExtBidPrebidVideo {
 	var (
 		duration float64 = 0
-		cat string
+		cat      string
 	)
 
 	for _, imp := range imps {
@@ -95,9 +95,9 @@ func getVideoImp(bid *openrtb.Bid, imps []openrtb.Imp) *openrtb_ext.ExtBidPrebid
 }
 
 func getTimeStringFromVastResponse(vastResponse string) string {
-	var(
-		dur = make([]uint8, 0, TimeStringLength)
-		idx int
+	var (
+		dur  = make([]uint8, 0, TimeStringLength)
+		idx  int
 		temp string
 		char uint8
 	)
@@ -355,7 +355,7 @@ func (a *SpotxAdapter) Call(ctx context.Context, req *pbs.PBSRequest, bidder *pb
 // "subpar" in some way. For example: the request contained ad types which this bidder doesn't support.
 //
 // If the error is caused by bad user input, return an errortypes.BadInput.
-func (a *SpotxAdapter) MakeRequests(request *openrtb.BidRequest) (result []*adapters.RequestData, errs []error) {
+func (a *SpotxAdapter) MakeRequests(request *openrtb.BidRequest, _ *adapters.ExtraRequestInfo) (result []*adapters.RequestData, errs []error) {
 	if len(request.Ext) > 0 {
 		var ext spotxReqExt
 		var param openrtb_ext.ExtImpSpotX
