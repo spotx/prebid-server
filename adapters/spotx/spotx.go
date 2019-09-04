@@ -193,7 +193,7 @@ func (a *SpotxAdapter) makeOpenRTBRequest(ctx context.Context, ortbReq *openrtb.
 	httpReq, err := http.NewRequest("POST", uri, bytes.NewBuffer(reqJSON))
 	httpReq.Header.Add("Content-Type", "application/json;charset=utf-8")
 	httpReq.Header.Add("Accept", "application/json")
-	httpReq.Header.Add("User-Agent", "spotx_prebid_server 1.0")
+	httpReq.Header.Add("User-Agent", ortbReq.Device.UA)
 
 	resp, err := ctxhttp.Do(ctx, a.http.Client, httpReq)
 	if err != nil {
@@ -284,7 +284,7 @@ func (a *SpotxAdapter) Call(ctx context.Context, req *pbs.PBSRequest, bidder *pb
 		}
 
 		if len(param.KVP) > 0 {
-			ortbReq.Imp[i].Ext = kvpToExt(param.KVP)
+			ortbReq.Imp[i].Video.Ext = kvpToExt(param.KVP)
 		}
 	}
 
